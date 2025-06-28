@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+// ConsultaScore.js
+import React, { useState, useEffect } from "react";
 import {
   Container,
   Typography,
@@ -16,18 +17,32 @@ import {
   ListItemText,
   MenuItem,
 } from "@mui/material";
+import api from "../servicos/api";
+import { useAuth } from "../servicos/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function ConsultaScore() {
   const [tipo, setTipo] = useState("cpf");
   const [cpfCnpj, setCpfCnpj] = useState("");
   const [score, setScore] = useState(null);
   const [resultado, setResultado] = useState("");
+  const [loading, setLoading] = useState(false);
   const [fatores] = useState([
     { fator: "Histórico de pagamentos", impacto: "neutro" },
     { fator: "Dívidas ativas", impacto: "negativo" },
     { fator: "Tempo de cadastro", impacto: "positivo" },
   ]);
   const [historico, setHistorico] = useState([]);
+
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      alert("Você precisa estar logado para consultar o score.");
+      navigate("/login");
+    }
+  }, [user, navigate]);
 
   const formatarCpfCnpj = (valor) => {
     const numeros = valor.replace(/\D/g, "");
@@ -45,39 +60,44 @@ export default function ConsultaScore() {
     }
   };
 
+  useEffect(() => {
+    if (cpfCnpj.replace(/\D/g, "").length >= 11) {
+      const cpfLimpo = cpfCnpj.replace(/\D/g, "");
+      api
+        .get(`/score/historico/${cpfLimpo}`)
+        .then((res) => setHistorico(res.data))
+        .catch(() => setHistorico([]));
+    }
+  }, [cpfCnpj]);
+
   const consultar = () => {
+    if (loading) return;
     if (!cpfCnpj.trim()) {
       alert("Digite um CPF ou CNPJ antes de consultar.");
       return;
     }
 
-    const novoScore = Math.floor(Math.random() * 1000);
-    let novoResultado = "";
-    if (novoScore > 700) {
-      novoResultado = "Score alto. Excelente histórico financeiro.";
-    } else if (novoScore > 400) {
-      novoResultado = "Score médio. Algumas melhorias podem ser feitas.";
-    } else {
-      novoResultado = "Score baixo. Atenção à sua saúde financeira.";
-    }
+    setLoading(true);
 
-    setScore(novoScore);
-    setResultado(novoResultado);
+    setTimeout(() => {
+      const novoScore = Math.floor(Math.random() * 1000);
+      let novoResultado = "";
+      if (novoScore > 700) {
+        novoResultado = "Score alto. Excelente histórico financeiro.";
+      } else if (novoScore > 400) {
+        novoResultado = "Score médio. Algumas melhorias podem ser feitas.";
+      } else {
+        novoResultado = "Score baixo. Atenção à sua saúde financeira.";
+      }
 
-    const dataConsulta = new Date();
-
-    setHistorico((old) => {
-      const novo = [{ cpfCnpj, score: novoScore, data: dataConsulta }, ...old];
-      return novo.slice(0, 50);
-    });
+      setScore(novoScore);
+      setResultado(novoResultado);
+      setLoading(false);
+    }, 5000);
   };
 
-  const historicoFiltrado = historico
-    .filter((item) => item.cpfCnpj === cpfCnpj)
-    .slice(0, 3);
-
   const formatarData = (data) => {
-    return data.toLocaleString("pt-BR", {
+    return new Date(data).toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -103,6 +123,7 @@ export default function ConsultaScore() {
               setCpfCnpj("");
             }}
             sx={{ width: 120 }}
+            disabled={loading}
           >
             <MenuItem value="cpf">CPF</MenuItem>
             <MenuItem value="cnpj">CNPJ</MenuItem>
@@ -114,10 +135,16 @@ export default function ConsultaScore() {
             fullWidth
             value={cpfCnpj}
             onChange={(e) => setCpfCnpj(formatarCpfCnpj(e.target.value))}
+            disabled={loading}
           />
 
-          <Button variant="contained" color="success" onClick={consultar}>
-            Consultar
+          <Button
+            variant="contained"
+            color="success"
+            onClick={consultar}
+            disabled={loading}
+          >
+            {loading ? "Aguarde..." : "Consultar"}
           </Button>
         </Box>
 
@@ -136,10 +163,7 @@ export default function ConsultaScore() {
         >
           {score !== null ? (
             <>
-              <Typography
-                variant="h3"
-                sx={{ color: "black", fontWeight: "bold" }}
-              >
+              <Typography variant="h3" sx={{ color: "black", fontWeight: "bold" }}>
                 {score}
               </Typography>
               <Typography variant="body1" sx={{ color: "black" }}>
@@ -156,20 +180,20 @@ export default function ConsultaScore() {
           )}
         </Box>
 
-        {historicoFiltrado.length > 0 && (
+        {historico.length > 0 && (
           <>
             <Typography variant="h6" sx={{ color: "black", mb: 2 }}>
               Histórico das últimas 3 consultas para {cpfCnpj}
             </Typography>
             <List sx={{ mb: 4 }}>
-              {historicoFiltrado.map((item, index) => (
+              {historico.map((item, index) => (
                 <ListItem
                   key={index}
                   sx={{ bgcolor: "#f0f0f0", mb: 1, borderRadius: 1 }}
                 >
                   <ListItemText
                     primary={`Score: ${item.score}`}
-                    secondary={`Data da consulta: ${formatarData(item.data)}`}
+                    secondary={`Data da consulta: ${formatarData(item.data_consulta)}`}
                     primaryTypographyProps={{ sx: { color: "black" } }}
                     secondaryTypographyProps={{ sx: { color: "gray" } }}
                   />
@@ -191,14 +215,10 @@ export default function ConsultaScore() {
                   <TableCell sx={{ color: "black" }}>{row.fator}</TableCell>
                   <TableCell align="right" sx={{ color: "black" }}>
                     {row.impacto === "positivo" && (
-                      <span style={{ color: "green" }}>
-                        + Impacto positivo
-                      </span>
+                      <span style={{ color: "green" }}>+ Impacto positivo</span>
                     )}
                     {row.impacto === "negativo" && (
-                      <span style={{ color: "red" }}>
-                        - Impacto negativo
-                      </span>
+                      <span style={{ color: "red" }}>- Impacto negativo</span>
                     )}
                     {row.impacto === "neutro" && <span>Impacto neutro</span>}
                   </TableCell>
