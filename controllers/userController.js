@@ -1,4 +1,4 @@
-const pool = require("../db/db");
+const pool = require("../db/banco");
 
 exports.getUsers = async (req, res) => {
   try {
