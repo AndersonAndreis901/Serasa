@@ -45,7 +45,7 @@ export default function Login() {
       login(cpf_cnpj.replace(/\D/g, ""));
       setErro("");
       alert("Login efetuado com sucesso!");
-      navigate("/painel");
+      navigate("/");
     } catch (err) {
       setErro(err.response?.data?.error || "Erro no login");
     }
